@@ -2,186 +2,188 @@
 
 > AI-powered Hiring Intelligence Platform that automates first-round technical interviews.
 
-HireMind AI streamlines early-stage technical screening by combining resume
-parsing, AI-generated questions, and multimodal interview analysis (speech and
-video signals) into a single, scoreable evaluation. This repository is
-structured as a production-style **Modular Monolith**.
+HireMind AI streamlines early-stage technical screening by combining AI-generated interview questions, candidate answer evaluation, and multimodal analysis (speech/video) into a single scoreable evaluation.
 
 ---
 
-## Architecture
+## Quick Start (Local — no Docker)
 
-- **Style:** Modular Monolith (single deployable backend + single frontend bundle).
-- **Backend:** FastAPI (async) with SQLAlchemy 2.0, Alembic migrations, PostgreSQL.
-- **Frontend:** React + TypeScript + Vite, TailwindCSS, React Router, TanStack Query.
-- **AI / Media:** Gemini API (questions & feedback), Whisper (speech), MediaPipe + OpenCV (video).
-- **Deployment:** Docker + Docker Compose.
+### Prerequisites
 
-Dependency direction (backend): `api -> services -> repositories -> models`.
-Inner layers never import outer layers (Clean Architecture).
+- Python 3.12+
+- Node.js 20+
+- Git
+
+### 1. Clone
+
+```bash
+git clone https://github.com/ArindumShree/hiremind-ai.git
+cd hiremind-ai
+```
+
+### 2. Backend setup
+
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Open `backend/.env` and set your **NVIDIA API key** (required for AI features):
+```
+NVIDIA_API_KEY=nvapi-your-key-here
+```
+
+Get a free key at [build.nvidia.com](https://build.nvidia.com/).
+
+### 3. Frontend setup
+
+```bash
+cd frontend
+npm install
+```
+
+### 4. Run
+
+From the `hiremind-ai` root:
+
+```powershell
+# Windows
+.\run-local.ps1
+```
+
+Or manually:
+
+```bash
+# Terminal 1 — backend
+cd backend
+.venv\Scripts\activate
+$env:DATABASE_URL="sqlite+aiosqlite:///./dev.db"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Terminal 2 — frontend
+cd frontend
+npm run dev -- --host
+```
+
+- **Frontend**: http://localhost:5173
+- **API docs**: http://localhost:8000/docs
+- **Health**: http://localhost:8000/api/v1/health
+
+### 5. Seed demo data (optional)
+
+With the backend running, open another terminal and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\path\to\seed.ps1
+```
+
+This creates 2 recruiters, 4 candidates, 4 job postings, applications, and a fully evaluated interview. Login with any account:
+
+| Email | Role | Password |
+|---|---|---|
+| `r1@hiremind.demo` | Recruiter (Acme Corp) | `Password123!` |
+| `r2@hiremind.demo` | Recruiter (Globex Inc) | `Password123!` |
+| `c1@hiremind.demo` | Candidate (Alice/MIT) | `Password123!` |
+| `c2@hiremind.demo` | Candidate (Bob/Stanford) | `Password123!` |
+| `c3@hiremind.demo` | Candidate (Carol/Berkeley) | `Password123!` |
+| `c4@hiremind.demo` | Candidate (David/Georgia Tech) | `Password123!` |
+
+### 6. Stop the servers
+
+```powershell
+Get-NetTCPConnection -LocalPort 8000,5173 -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+```
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                                  |
-|--------------|---------------------------------------------|
-| Frontend     | React, TypeScript, Vite, TailwindCSS        |
-| Routing      | React Router                                |
-| Data fetching| TanStack Query, Axios                       |
-| Backend      | FastAPI, Pydantic                           |
-| ORM          | SQLAlchemy 2.0 (async)                      |
-| Migrations   | Alembic                                     |
-| Database     | PostgreSQL 17                               |
-| Auth         | JWT (planned, Stage 2)                      |
-| AI           | Gemini API (planned)                        |
-| Speech       | Whisper (planned)                           |
-| Video        | MediaPipe + OpenCV (planned)                |
-| Deploy       | Docker, Docker Compose                      |
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, TailwindCSS |
+| Routing | React Router 6 |
+| State/API | TanStack Query, Axios |
+| Backend | FastAPI, Pydantic v2 |
+| ORM | SQLAlchemy 2.0 (async) |
+| Migrations | Alembic |
+| Database | PostgreSQL 17 (prod) / SQLite (local dev) |
+| Auth | JWT (access + refresh tokens) |
+| AI | NVIDIA NIM (LLaMA 3.3 Nemotron) |
+| Speech | Whisper (via OpenAI-compatible API) |
+| Video | OpenCV (cv2) |
+| Deploy | Docker, Docker Compose |
 
 ---
 
-## Folder Structure
+## Project Structure
 
 ```
 hiremind-ai/
 ├── frontend/                 # React + Vite + TS + Tailwind
 │   ├── src/
-│   │   ├── pages/            # Placeholder pages (Home, Login, ...)
-│   │   ├── components/
-│   │   ├── layouts/
-│   │   ├── services/         # API client
-│   │   ├── hooks/
+│   │   ├── pages/            # UI pages
+│   │   ├── components/       # Reusable components
+│   │   ├── layouts/          # Layout + nav
+│   │   ├── services/         # API clients
+│   │   ├── hooks/            # Custom hooks
 │   │   └── App.tsx
 │   ├── Dockerfile
 │   └── nginx.conf
 ├── backend/                  # FastAPI + SQLAlchemy + Alembic
 │   ├── app/
-│   │   ├── api/              # Routers (health)
-│   │   ├── core/            # Config, db, logging, errors
-│   │   ├── config/          # Settings (pydantic-settings)
-│   │   ├── models/          # SQLAlchemy entities
-│   │   ├── schemas/         # Pydantic DTOs
-│   │   ├── services/
-│   │   ├── repositories/
-│   │   ├── middleware/       # Exception + request logging
-│   │   └── utils/
-│   ├── alembic/             # Migration env
-│   ├── tests/
-│   ├── uploads/             # resume/ and videos/ (gitignored contents)
+│   │   ├── api/              # Route handlers
+│   │   ├── core/             # Config, DB, logging, security
+│   │   ├── config/           # Settings (pydantic-settings)
+│   │   ├── models/           # SQLAlchemy entities
+│   │   ├── schemas/          # Pydantic DTOs
+│   │   ├── services/         # Business logic
+│   │   ├── repositories/     # Data access layer
+│   │   └── middleware/       # Exception + request logging
+│   ├── alembic/              # Migration scripts
+│   ├── tests/                # pytest suite (50+ tests)
 │   ├── Dockerfile
 │   └── requirements.txt
-├── docker/                   # Shared Docker config
-├── docs/                     # Project documentation (markdown)
-├── .github/workflows/ci.yml  # Base CI
+├── .github/workflows/ci.yml  # CI pipeline
 ├── docker-compose.yml
-└── README.md
+└── run-local.ps1              # One-command local launcher
 ```
-
----
-
-## Installation
-
-### Prerequisites
-
-- Git
-- Docker Desktop (recommended) **or** local Python 3.12+ and Node.js 20+
-- PostgreSQL 17 (only if running locally without Docker)
-
-### 1. Clone
-
-```bash
-git clone <repo-url>
-cd hiremind-ai
-```
-
-### 2. Configure environment
-
-```bash
-cp backend/.env.example backend/.env
-# Edit backend/.env with your secrets (do NOT commit real secrets)
-```
-
----
-
-## Running Locally (without Docker)
-
-### Backend
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --port 8000
-```
-
-- API docs: http://localhost:8000/docs
-- Health: http://localhost:8000/api/v1/health
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm run dev
-```
-
-- App: http://localhost:5173
 
 ---
 
 ## Running with Docker
 
-From the repository root:
-
 ```bash
 docker compose up --build
 ```
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000/docs
-- PostgreSQL available on `localhost:5432`
-
-To run in detached mode: `docker compose up -d --build`.
+You'll still need to set `NVIDIA_API_KEY` in `backend/.env` before building.
 
 ---
 
-## Development Workflow
+## Development
 
-- **Backend**
-  - Lint: `ruff check .`
-  - Test: `pytest`
-  - Migrations: `alembic revision --autogenerate -m "msg"` then `alembic upgrade head`
-- **Frontend**
-  - Dev server: `npm run dev`
-  - Lint: `npm run lint`
-  - Format: `npm run format`
-  - Build: `npm run build`
-- **Conventions**
-  - PEP8, SOLID, Clean Architecture on the backend.
-  - No hardcoded secrets — all configuration via `.env`.
-  - Meaningful naming, reusable code, proper logging and error handling.
+| Command | Location | Action |
+|---|---|---|
+| `ruff check .` | `backend/` | Lint Python |
+| `pytest` | `backend/` | Run tests |
+| `alembic upgrade head` | `backend/` | Apply migrations |
+| `npm run lint` | `frontend/` | Lint frontend |
+| `npm run build` | `frontend/` | Build frontend |
 
 ---
 
-## Future Roadmap
+## Roles & Features
 
-| Stage | Scope |
-|-------|-------|
-| 1 (done) | Project foundation: scaffolding, config, logging, errors, health, Docker. |
-| 2 | Authentication (JWT, roles). |
-| 3 | Database models + migrations. |
-| 4 | Resume upload. |
-| 5 | Resume parsing. |
-| 6 | AI question generation (Gemini). |
-| 7 | Interview module. |
-| 8 | Speech analysis (Whisper). |
-| 9 | Video analysis (MediaPipe + OpenCV). |
-| 10 | Evaluation engine. |
-| 11 | Recruiter dashboard. |
-| 12 | Production deployment. |
+- **Recruiters**: Post jobs, shortlist candidates, start AI interviews, review answer scores + speech/video analysis, view candidates side-by-side.
+- **Candidates**: Upload resume, browse/publish jobs, apply, take AI-generated interviews (text + optional audio/video answers).
 
-See `ROADMAP.md`, `ARCHITECTURE.md`, and `TASKS.md` for details.
+---
+
+## License
+
+MIT
