@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008: FastAPI's `Depends(...)` in defaults is the intended idiom.
+# UP017/UP035/UP042: keep broad compatibility with the current style.
+ignore = ["B008", "UP017", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*" = ["E501", "I001", "UP035", "UP007"]

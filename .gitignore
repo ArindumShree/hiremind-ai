@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+ruff_cache/
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+!.env.example
+
+# SQLite database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Uploaded files (resumes, media)
+uploads/
+
+# Node
+node_modules/
+dist/
+*.local
+
+# Frontend build artifacts
+frontend/tsconfig.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js
+
+# Logs
+*.log
+*.err
+*.out
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker
+docker/data/
+
+# Project-specific (opencode session files)
+.opencode/
+memory.md
