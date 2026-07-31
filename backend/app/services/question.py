@@ -140,7 +140,7 @@ class QuestionService:
             "max_tokens": 1024,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             try:
                 resp = await client.post(url, json=payload, headers=headers)
             except httpx.HTTPError as exc:
