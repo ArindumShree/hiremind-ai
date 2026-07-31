@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
@@ -63,22 +62,21 @@ async def get_interview_media(
     interview_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     """Return the first stored answer media (audio/video) for playback."""
     service = InterviewService(session)
     interview = await service._resolve_for_analysis(interview_id, current_user)
-    media_path = service._first_media_path(interview, ("audio", "video"))
-    if not media_path or not os.path.exists(media_path):
+    media_ref = service._first_media_path(interview, ("audio", "video"))
+    if not media_ref:
         raise NotFoundError("No media found for this interview")
-    media_type = "application/octet-stream"
-    for item in interview.questions_json or []:
-        if item.get("media_path") == media_path:
-            media_type = item.get("media_type") or media_type
-            break
-    return FileResponse(
-        media_path,
-        media_type=media_type,
-        filename=os.path.basename(media_path),
+
+    data, filename, content_type = await service.get_media_bytes(media_ref)
+    if data is None:
+        raise NotFoundError("No media found for this interview")
+    return Response(
+        data,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -131,8 +129,11 @@ async def submit_interview_media(
     if file is not None:
         data = await file.read()
         service = InterviewService(session)
-        stored_path = service.save_media(
-            interview_id, file.filename or "answer", data
+        stored_path = await service.save_media(
+            interview_id,
+            file.filename or "answer",
+            file.content_type or "application/octet-stream",
+            data,
         )
         # Attach the media reference to the first answer (or create one).
         if parsed:

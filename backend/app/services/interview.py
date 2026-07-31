@@ -13,6 +13,7 @@ from app.models.enums import (
     InterviewStatus,
 )
 from app.models.interview import Interview
+from app.models.interview_media import InterviewMedia
 from app.repositories.application import ApplicationRepository
 from app.repositories.interview import InterviewRepository
 from app.repositories.job import JobRepository
@@ -198,9 +199,12 @@ class InterviewService:
         self, interview_id: uuid.UUID, user
     ) -> Interview:
         interview = await self._resolve_for_analysis(interview_id, user)
-        audio_path = self._first_media_path(interview, ("audio", "video"))
-        if not audio_path:
+        audio_ref = self._first_media_path(interview, ("audio", "video"))
+        if not audio_ref:
             raise BadRequestError("No audio media found for this interview")
+        audio_path = await self.resolve_media_ref(audio_ref)
+        if not audio_path:
+            raise BadRequestError("Audio media file is missing")
 
         from app.services.speech import SpeechAnalysisService
 
@@ -216,9 +220,12 @@ class InterviewService:
         self, interview_id: uuid.UUID, user
     ) -> Interview:
         interview = await self._resolve_for_analysis(interview_id, user)
-        video_path = self._first_media_path(interview, ("video",))
-        if not video_path:
+        video_ref = self._first_media_path(interview, ("video",))
+        if not video_ref:
             raise BadRequestError("No video media found for this interview")
+        video_path = await self.resolve_media_ref(video_ref)
+        if not video_path:
+            raise BadRequestError("Video media file is missing")
 
         from app.services.video import VideoAnalysisService
 
@@ -280,17 +287,69 @@ class InterviewService:
             for i, text in enumerate(_GENERIC_QUESTIONS)
         ]
 
-    def save_media(
-        self, interview_id: uuid.UUID, filename: str, data: bytes
+    async def save_media(
+        self, interview_id: uuid.UUID, filename: str, content_type: str, data: bytes
     ) -> str:
-        """Persist an uploaded answer media file; return its stored path."""
-        extension = os.path.splitext(filename)[1].lower() or ".bin"
-        stored_name = f"{uuid.uuid4()}{extension}"
-        base = os.path.join(
-            settings.UPLOAD_DIR, "interviews", str(interview_id)
+        """Persist an uploaded answer media file into the database.
+
+        Returns a ``db://`` reference that resolves to the stored bytes.
+        """
+        media = InterviewMedia(
+            interview_id=interview_id,
+            filename=filename,
+            content_type=content_type or "application/octet-stream",
+            size_bytes=len(data),
+            file_data=data,
         )
-        os.makedirs(base, exist_ok=True)
-        full_path = os.path.join(base, stored_name)
-        with open(full_path, "wb") as handle:
-            handle.write(data)
-        return full_path
+        self._session.add(media)
+        await self._session.flush()
+        return f"db://interviews/{interview_id}/{media.id}"
+
+    async def resolve_media_ref(self, ref: str) -> str | None:
+        """Return the file path for a stored media reference.
+
+        ``db://`` refs need to be materialized to a temp file before they can be
+        consumed by file-based libraries (Whisper, OpenCV). Local paths are
+        returned unchanged.
+        """
+        if not ref.startswith("db://"):
+            return ref if os.path.exists(ref) else None
+        media_id = ref.rsplit("/", 1)[-1]
+        from sqlalchemy import select
+
+        result = await self._session.execute(
+            select(InterviewMedia).where(InterviewMedia.id == media_id)
+        )
+        media = result.scalar_one_or_none()
+        if media is None or not media.file_data:
+            return None
+        extension = os.path.splitext(media.filename)[1].lower() or ".bin"
+        temp_path = os.path.join(
+            "/tmp", "interview_media", str(media.id) + extension
+        )
+        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
+        if not os.path.exists(temp_path):
+            with open(temp_path, "wb") as handle:
+                handle.write(media.file_data)
+        return temp_path
+
+    async def get_media_bytes(
+        self, ref: str
+    ) -> tuple[bytes | None, str, str]:
+        """Return (bytes, filename, content_type) for a stored media reference."""
+        if ref.startswith("db://"):
+            media_id = ref.rsplit("/", 1)[-1]
+            from sqlalchemy import select
+
+            result = await self._session.execute(
+                select(InterviewMedia).where(InterviewMedia.id == media_id)
+            )
+            media = result.scalar_one_or_none()
+            if media is None:
+                return None, "answer", "application/octet-stream"
+            return (
+                media.file_data,
+                media.filename,
+                media.content_type,
+            )
+        return None, "answer", "application/octet-stream"

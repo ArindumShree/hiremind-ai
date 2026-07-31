@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from app.services.resume import parse_profile_fields
 from tests.conftest import register_and_login
 
@@ -124,7 +122,7 @@ async def test_unauthenticated_cannot_upload(client):
     assert resp.status_code == 401
 
 
-async def test_upload_creates_file_on_disk(client, candidate_payload):
+async def test_upload_stores_bytes_in_db(client, candidate_payload):
     auth = await _auth(client, candidate_payload)
     resp = await client.post(
         "/api/v1/resume/upload",
@@ -133,11 +131,11 @@ async def test_upload_creates_file_on_disk(client, candidate_payload):
     )
     assert resp.status_code == 200
 
-    matches = []
-    for root, _dirs, files in os.walk("uploads"):
-        for f in files:
-            matches.append(os.path.join(root, f))
-    assert len(matches) >= 1
+    download = await client.get(
+        "/api/v1/resume/download", headers=auth["headers"]
+    )
+    assert download.status_code == 200
+    assert download.content == VALID_PDF
 
 
 async def test_parse_returns_404_when_no_resume(client, candidate_payload):

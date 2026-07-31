@@ -7,6 +7,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.interview import Interview
+from app.models.interview_media import InterviewMedia
 from app.models.job import Job
 from app.models.profile import Profile
 from app.models.refresh_token import RefreshToken
@@ -26,4 +27,5 @@ __all__ = [
     "Job",
     "Application",
     "Interview",
+    "InterviewMedia",
 ]

@@ -22,6 +22,7 @@ from app.utils.time import utc_now
 
 if TYPE_CHECKING:
     from app.models.application import Application
+    from app.models.interview_media import InterviewMedia
 
 
 class Interview(Base):
@@ -87,6 +88,11 @@ class Interview(Base):
 
     application: Mapped[Application] = relationship(
         back_populates="interview", lazy="selectin"
+    )
+    media: Mapped[list[InterviewMedia]] = relationship(
+        back_populates="interview",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
