@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import mimetypes
+import os
 import re
 import uuid
 
