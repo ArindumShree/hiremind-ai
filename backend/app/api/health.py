@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import socket
 from typing import Any
 from urllib.parse import urlsplit
@@ -28,6 +29,8 @@ async def db_debug() -> dict[str, Any]:
         "uses_pooler": "pooler" in host,
         "user": parts.username,
         "db": parts.path.lstrip("/"),
+        "env_var_names": sorted(k for k in os.environ if "DB" in k.upper() or "URL" in k.upper() or "DATABASE" in k.upper()),
+        "has_database_url": "DATABASE_URL" in os.environ,
     }
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
