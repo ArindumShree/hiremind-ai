@@ -23,6 +23,7 @@ engine: AsyncEngine = create_async_engine(
     max_overflow=settings.DB_MAX_OVERFLOW,
     echo=settings.DEBUG,
     future=True,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
