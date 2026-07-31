@@ -78,7 +78,11 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         """Synchronous database URL for Alembic / scripts."""
         if self.DATABASE_URL:
-            sync = self.DATABASE_URL.replace("+aiosqlite", "")
+            sync = (
+                self.DATABASE_URL.replace("+aiosqlite", "")
+                .replace("+asyncpg", "+psycopg")
+                .replace("postgresql://", "postgresql+psycopg://", 1)
+            )
             return sync
         return (
             f"postgresql+psycopg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
@@ -89,7 +93,9 @@ class Settings(BaseSettings):
     def database_url_async(self) -> str:
         """Asynchronous database URL for the running application."""
         if self.DATABASE_URL:
-            return self.DATABASE_URL
+            return self.DATABASE_URL.replace(
+                "postgresql://", "postgresql+asyncpg://", 1
+            )
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

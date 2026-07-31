@@ -165,6 +165,51 @@ You'll still need to set `NVIDIA_API_KEY` in `backend/.env` before building.
 
 ---
 
+## Deploy to Vercel
+
+This repo is configured to deploy **frontend + backend in a single Vercel
+project** (`vercel.json` + `api/index.py`): the FastAPI app runs as a Vercel
+serverless function, the Vite app is served as static files, and `/api/v1/*`
+is rewritten to the function — so no CORS config is needed.
+
+### 1. Create a free Postgres database (Neon)
+
+- Sign up at <https://neon.tech> (free tier).
+- Create a project; copy its **connection string**
+  (`postgresql://user:pass@host/dbname`).
+
+### 2. Deploy on Vercel
+
+- Import `https://github.com/ArindumShree/hiremind-ai` in the Vercel dashboard
+  (Framework Preset: **Vite**; Root Directory: leave empty).
+- Add these **environment variables** in the project Settings → Environment Variables:
+
+| Name | Value |
+|---|---|
+| `DATABASE_URL` | your Neon URL, e.g. `postgresql://user:pass@host/dbname` |
+| `NVIDIA_API_KEY` | your `nvapi-...` key from build.nvidia.com |
+| `SECRET_KEY` | a long random string |
+| `BACKEND_CORS_ORIGINS` | your Vercel app URL, e.g. `https://hiremind-ai.vercel.app` |
+
+- Deploy. When the deployment builds, run the database migrations once:
+
+```bash
+cd backend
+.venv\Scripts\activate
+set DATABASE_URL=postgresql://user:pass@host/dbname
+alembic upgrade head
+```
+
+### 3. Note (upload/media features)
+
+Resumes, interview audio and video are written to a local filesystem
+(`backend/uploads/`) — on Vercel's ephemeral serverless storage these are not
+persisted. Core features (auth, jobs, applications, AI questions, text
+evaluation) work on Vercel; resume/media **upload + analysis** need object
+storage (e.g. Vercel Blob / S3) for full support.
+
+---
+
 ## Development
 
 | Command | Location | Action |
