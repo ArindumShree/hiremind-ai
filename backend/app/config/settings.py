@@ -93,9 +93,12 @@ class Settings(BaseSettings):
     def database_url_async(self) -> str:
         """Asynchronous database URL for the running application."""
         if self.DATABASE_URL:
-            return self.DATABASE_URL.replace(
+            async_url = self.DATABASE_URL.replace(
                 "postgresql://", "postgresql+asyncpg://", 1
             )
+            # asyncpg uses `ssl=` (not `sslmode=` like psycopg).
+            async_url = async_url.replace("sslmode=require", "ssl=require")
+            return async_url
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
