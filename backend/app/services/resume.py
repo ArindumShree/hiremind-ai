@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import io
 import mimetypes
-import os
 import re
 import uuid
 
@@ -64,20 +64,16 @@ class ResumeService:
 
         existing = await self._resumes.get_by_candidate_id(candidate_id)
         if existing is not None:
-            self._remove_file(existing.stored_path)
             await self._resumes.delete_by_candidate_id(candidate_id)
             await self._session.flush()
-
-        extension = os.path.splitext(filename)[1].lower()
-        stored_name = f"{uuid.uuid4()}{extension}"
-        stored_path = self._save_file(candidate_id, stored_name, data)
 
         resume = Resume(
             candidate_id=candidate_id,
             filename=filename,
-            stored_path=stored_path,
+            stored_path="db://resumes/" + str(candidate_id),
             content_type=content_type,
             size_bytes=len(data),
+            file_data=data,
         )
         resume = await self._resumes.add(resume)
         await self._session.commit()
@@ -88,7 +84,6 @@ class ResumeService:
         resume = await self._resumes.get_by_candidate_id(candidate_id)
         if resume is None:
             return
-        self._remove_file(resume.stored_path)
         await self._resumes.delete_by_candidate_id(candidate_id)
         await self._session.commit()
 
@@ -111,23 +106,6 @@ class ResumeService:
                 f"File exceeds the {settings.MAX_UPLOAD_SIZE_MB} MB limit."
             )
 
-    def _save_file(
-        self, candidate_id: uuid.UUID, stored_name: str, data: bytes
-    ) -> str:
-        base = os.path.join(settings.UPLOAD_DIR, "candidates", str(candidate_id))
-        os.makedirs(base, exist_ok=True)
-        full_path = os.path.join(base, stored_name)
-        with open(full_path, "wb") as handle:
-            handle.write(data)
-        return full_path
-
-    def _remove_file(self, path: str) -> None:
-        try:
-            if os.path.exists(path):
-                os.remove(path)
-        except OSError:
-            pass
-
     def extract_text(self, resume: Resume) -> str:
         """Extract plain text from a stored resume file.
 
@@ -135,15 +113,21 @@ class ResumeService:
         clear :class:`BadRequestError` since reliable parsing requires
         external tools that are not guaranteed to be available.
         """
+        data = resume.file_data
+        if not data:
+            raise BadRequestError(
+                "Resume file data is missing; please re-upload the resume"
+            )
+
         extension = os.path.splitext(resume.filename)[1].lower()
         content_type = resume.content_type.lower()
 
         if extension == ".pdf" or content_type == "application/pdf":
-            return self._extract_pdf(resume.stored_path)
+            return self._extract_pdf(data)
         if extension == ".docx" or (
             "wordprocessingml" in content_type or "officedocument" in content_type
         ):
-            return self._extract_docx(resume.stored_path)
+            return self._extract_docx(data)
         if extension == ".doc" or content_type == "application/msword":
             raise BadRequestError(
                 "DOC parsing unsupported; please upload PDF or DOCX"
@@ -153,12 +137,12 @@ class ResumeService:
         )
 
     @staticmethod
-    def _extract_pdf(path: str) -> str:
+    def _extract_pdf(data: bytes) -> str:
         import pdfplumber
 
         pages: list[str] = []
         try:
-            with pdfplumber.open(path) as pdf:
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
                 for page in pdf.pages:
                     pages.append(page.extract_text() or "")
         except Exception as exc:  # pragma: no cover - depends on file bytes
@@ -166,11 +150,11 @@ class ResumeService:
         return _normalize_whitespace("\n".join(pages))
 
     @staticmethod
-    def _extract_docx(path: str) -> str:
+    def _extract_docx(data: bytes) -> str:
         import docx
 
         try:
-            document = docx.Document(path)
+            document = docx.Document(io.BytesIO(data))
         except Exception as exc:  # pragma: no cover - depends on file bytes
             raise BadRequestError(f"Failed to read DOCX: {exc}") from exc
         paragraphs = [paragraph.text for paragraph in document.paragraphs]

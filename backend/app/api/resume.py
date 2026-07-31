@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
@@ -60,14 +59,14 @@ async def get_resume(
 async def download_resume(
     current_user: User = Depends(require_role(UserRole.CANDIDATE)),
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     resume = await ResumeService(session).get_for_candidate(current_user.id)
-    if resume is None or not os.path.exists(resume.stored_path):
+    if resume is None or not resume.file_data:
         raise NotFoundError("No resume uploaded yet")
-    return FileResponse(
-        resume.stored_path,
+    return Response(
+        resume.file_data,
         media_type=resume.content_type,
-        filename=resume.filename,
+        headers={"Content-Disposition": f'attachment; filename="{resume.filename}"'},
     )
 
 
@@ -120,12 +119,12 @@ async def download_candidate_resume(
     user_id: uuid.UUID,
     current_user: User = Depends(require_role(UserRole.RECRUITER)),
     session: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     resume = await ResumeService(session).get_for_candidate(user_id)
-    if resume is None or not os.path.exists(resume.stored_path):
+    if resume is None or not resume.file_data:
         raise NotFoundError("No resume uploaded yet")
-    return FileResponse(
-        resume.stored_path,
+    return Response(
+        resume.file_data,
         media_type=resume.content_type,
-        filename=resume.filename,
+        headers={"Content-Disposition": f'attachment; filename="{resume.filename}"'},
     )
